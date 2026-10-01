@@ -164,11 +164,24 @@ def hay(comando: str) -> bool:
     return shutil.which(comando) is not None
 
 
+SECRETOS = re.compile(r"(_API_KEY|_TOKEN|_SECRET|_PASSWORD|PASSWORD|CREDENTIALS)$", re.I)
+
+
 def entorno_limpio() -> dict:
-    """Sin VIRTUAL_ENV ni PYTHONPATH: un venv externo puede colar paquetes que
-    rompen la colección de pruebas de un proyecto ajeno."""
-    env = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "PYTHONPATH")}
+    """Entorno sin nada que venga de mi máquina.
+
+    Fuera VIRTUAL_ENV y PYTHONPATH, porque un venv externo cuela paquetes que
+    rompen la colección de pruebas de un proyecto ajeno. Y fuera claves, tokens
+    y contraseñas heredados: una suite que cambia de rama según si hay una clave
+    en el entorno no es reproducible, y el resultado que publica este script
+    tiene que salir de la misma situación que tendrá quien lo ejecute.
+    """
+    env = {
+        k: v for k, v in os.environ.items()
+        if k not in ("VIRTUAL_ENV", "PYTHONPATH", "DATABASE_URL") and not SECRETOS.search(k)
+    }
     env.setdefault("CI", "1")
+    env.setdefault("NODE_ENV", "test")
     return env
 
 
@@ -196,14 +209,27 @@ def clonar(repo: str, destino: Path) -> tuple[int, str]:
 
 def parsear(runner: str, salida: str) -> tuple[int, int]:
     if runner == "maven":
-        m = re.search(PATRONES["maven"], salida)
-        if not m:
+        # Maven imprime una línea por clase de prueba y luego el resumen: el
+        # total es la última, no la primera.
+        todas = re.findall(PATRONES["maven"], salida)
+        if not todas:
             return 0, 0
-        return int(m.group(1)), int(m.group(2)) + int(m.group(3))
+        pasan, fallos, errores = todas[-1]
+        return int(pasan), int(fallos) + int(errores)
     m = re.search(PATRONES[runner], salida, re.M)
     if not m:
         return 0, 0
-    return int(m.group(1)), 0
+    fallos = 0
+    if runner == "node":
+        f = re.search(r"^ℹ fail (\d+)", salida, re.M)
+        fallos = int(f.group(1)) if f else 0
+    elif runner in ("jest", "vitest"):
+        f = re.search(r"Tests:\s+(\d+)\s+failed", salida)
+        fallos = int(f.group(1)) if f else 0
+    elif runner == "pytest":
+        f = re.search(r"(\d+)\s+failed", salida)
+        fallos = int(f.group(1)) if f else 0
+    return int(m.group(1)), fallos
 
 
 def levantar_postgres(nombre: str) -> str | None:

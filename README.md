@@ -50,7 +50,8 @@ python verificar.py --mantener               # conservar los clones temporales
 | Kavana Warehouse | API | Jest con PostgreSQL 16 |
 
 El informe final está en [resultados.md](resultados.md), con la fecha de la
-última ejecución y el número de pruebas que pasan en cada suite.
+última ejecución y el número de pruebas que pasan en cada suite. Última
+ejecución publicada: **1.263 pruebas en verde en las 8 suites**.
 
 ## Nota de honestidad
 

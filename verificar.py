@@ -167,7 +167,7 @@ def hay(comando: str) -> bool:
 SECRETOS = re.compile(r"(_API_KEY|_TOKEN|_SECRET|_PASSWORD|PASSWORD|CREDENTIALS)$", re.I)
 
 
-def entorno_limpio() -> dict:
+def entorno_limpio(extra: dict | None = None) -> dict:
     """Entorno sin nada que venga de mi máquina.
 
     Fuera VIRTUAL_ENV y PYTHONPATH, porque un venv externo cuela paquetes que
@@ -182,13 +182,18 @@ def entorno_limpio() -> dict:
     }
     env.setdefault("CI", "1")
     env.setdefault("NODE_ENV", "test")
+    if extra:
+        # Explícitas y solo para esta suite: la conexión a la base de datos de
+        # pruebas se inyecta aquí, no se hereda del entorno de quien ejecuta.
+        env.update(extra)
     return env
 
 
-def ejecutar(cmd: list[str], cwd: Path, timeout: int) -> tuple[int, str]:
+def ejecutar(cmd: list[str], cwd: Path, timeout: int,
+             extra_env: dict | None = None) -> tuple[int, str]:
     try:
         r = subprocess.run(
-            cmd, cwd=str(cwd), env=entorno_limpio(), capture_output=True,
+            cmd, cwd=str(cwd), env=entorno_limpio(extra_env), capture_output=True,
             text=True, timeout=timeout,
         )
         return r.returncode, (r.stdout or "") + (r.stderr or "")
@@ -290,6 +295,7 @@ def ejecutar_suite(suite: dict, raiz: Path) -> Resultado:
         return res
 
     contenedor = None
+    datos: dict = {}
     if suite.get("necesita_postgres"):
         url = levantar_postgres(f"verify-{suite['id']}")
         if not url:
@@ -297,7 +303,7 @@ def ejecutar_suite(suite: dict, raiz: Path) -> Resultado:
             res.detalle = "no se pudo levantar PostgreSQL"
             return res
         contenedor = f"verify-{suite['id']}"
-        os.environ["DATABASE_URL"] = url
+        datos = {"DATABASE_URL": url}
 
     try:
         if suite["instalar"]:
@@ -310,12 +316,12 @@ def ejecutar_suite(suite: dict, raiz: Path) -> Resultado:
             for paso in (["npx", "prisma", "generate"],
                          ["npx", "prisma", "migrate", "deploy"],
                          ["node", "prisma/seed.js"]):
-                codigo, salida = ejecutar(paso, trabajo, 600)
+                codigo, salida = ejecutar(paso, trabajo, 600, extra_env=datos)
                 if codigo != 0:
                     res.estado = "fallo al preparar la base de datos"
                     res.log = salida.strip().splitlines()[-20:]
                     return res
-        codigo, salida = ejecutar(suite["probar"], trabajo, 1800)
+        codigo, salida = ejecutar(suite["probar"], trabajo, 1800, extra_env=datos)
         res.pasan, res.fallan = parsear(suite["runner"], salida)
         res.log = salida.strip().splitlines()[-25:]
         if codigo == 0 and res.pasan:
@@ -325,7 +331,6 @@ def ejecutar_suite(suite: dict, raiz: Path) -> Resultado:
     finally:
         if contenedor:
             subprocess.run(["docker", "rm", "-f", contenedor], capture_output=True, text=True)
-            os.environ.pop("DATABASE_URL", None)
     res.segundos = time.time() - arranque
     return res
 

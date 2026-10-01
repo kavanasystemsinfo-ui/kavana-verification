@@ -43,7 +43,7 @@ python verificar.py --mantener               # conservar los clones temporales
 | Kavana Manufacturing | backend | Vitest |
 | Kavana Manufacturing | frontend | Vitest |
 | Kavana Steelworks | backend | pytest |
-| Mecania | aplicación | JUnit y Failsafe con Maven |
+| Laboratorio ERP (muebles) | módulo y panel | pytest |
 | Kavana BusRoad | backend | pytest |
 | Kavana RouteAI | servidor | node:test |
 | Calculadora Kavana | motor | node:test |
@@ -51,15 +51,16 @@ python verificar.py --mantener               # conservar los clones temporales
 
 El informe final está en [resultados.md](resultados.md), con la fecha de la
 última ejecución y el número de pruebas que pasan en cada suite. Última
-ejecución publicada: **1.263 pruebas en verde en las 8 suites**.
+ejecución publicada: **1.311 pruebas en verde en las 8 suites**.
 
 ## Nota de honestidad
 
-Hay un proyecto que no aparece aquí: un laboratorio de ERP sobre Odoo Community
-(scoring de leads, OCR local de facturas, impuestos españoles, catálogo) cuya
-suite tiene 452 pruebas en verde. Su repositorio es privado, así que cualquiera
-que lo lea no puede reproducirlo y por eso queda fuera de la tabla y del total.
-Si algún día ese trabajo se publica, entra en el script como una suite más.
+La tabla cubre solo repositorios públicos. Hay trabajo cuyo código no se puede
+publicar y que por eso no aparece aquí: si no se puede reproducir, no se cuenta,
+y un trabajo con pruebas en verde no engorda el titular de esta página si nadie
+puede ejecutarlas.
+
+Este repositorio ejecuta lo que hay: ni una prueba de más, ni una de menos.
 
 ## Licencia
 

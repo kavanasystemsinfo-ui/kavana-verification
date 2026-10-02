@@ -42,7 +42,13 @@ SUITES = [
         "runner": "vitest",
         "instalar": ["npm", "ci", "--no-audit", "--no-fund"],
         "probar": ["npm", "test"],
-        "requiere": "node",
+        "requiere": "node+docker",
+        # La suite del backend ejecuta SQL de verdad (aislamiento entre clientes
+        # y producción). Sin base, 48 pruebas quedan saltadas y la cifra que se
+        # publica sale más baja que la real: se levanta una base y se le aplica
+        # la cadena de migraciones y el sembrado, igual que hace la integración.
+        "necesita_postgres": True,
+        "preparar": [["node", "database/scripts/e2e-setup.js"]],
     },
     {
         "id": "manufacturing-frontend",
@@ -129,6 +135,9 @@ SUITES = [
         "probar": ["npm", "test"],
         "requiere": "node+docker",
         "necesita_postgres": True,
+        "preparar": [["npx", "prisma", "generate"],
+                     ["npx", "prisma", "migrate", "deploy"],
+                     ["node", "prisma/seed.js"]],
     },
 ]
 
@@ -136,7 +145,10 @@ PATRONES = {
     "vitest": r"Tests\s+(\d+)\s+passed",
     "pytest": r"(\d+)\s+passed",
     "jest": r"Tests:\s+(\d+)\s+passed",
-    "node": r"^ℹ pass (\d+)",
+    # El runner de Node cambia el resumen según la versión: unas veces «ℹ pass N»
+    # y otras «# pass N» (formato TAP). Aceptar los dos evita dar por fallida
+    # una suite que ha pasado entera, que es la peor forma de equivocarse.
+    "node": r"(?:ℹ|#) pass (\d+)",
     "maven": r"Tests run:\s*(\d+),\s*Failures:\s*(\d+),\s*Errors:\s*(\d+)",
 }
 
@@ -230,7 +242,7 @@ def parsear(runner: str, salida: str) -> tuple[int, int]:
         return 0, 0
     fallos = 0
     if runner == "node":
-        f = re.search(r"^ℹ fail (\d+)", salida, re.M)
+        f = re.search(r"(?:ℹ|#) fail (\d+)", salida, re.M)
         fallos = int(f.group(1)) if f else 0
     elif runner in ("jest", "vitest"):
         f = re.search(r"Tests:\s+(\d+)\s+failed", salida)
@@ -316,11 +328,9 @@ def ejecutar_suite(suite: dict, raiz: Path) -> Resultado:
                 res.estado = "fallo al instalar"
                 res.log = salida.strip().splitlines()[-20:]
                 return res
-        if suite.get("necesita_postgres"):
-            for paso in (["npx", "prisma", "generate"],
-                         ["npx", "prisma", "migrate", "deploy"],
-                         ["node", "prisma/seed.js"]):
-                codigo, salida = ejecutar(paso, trabajo, 600, extra_env=datos)
+        if suite.get("preparar"):
+            for paso in suite["preparar"]:
+                codigo, salida = ejecutar(paso, destino, 900, extra_env=datos)
                 if codigo != 0:
                     res.estado = "fallo al preparar la base de datos"
                     res.log = salida.strip().splitlines()[-20:]

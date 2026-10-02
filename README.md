@@ -61,7 +61,7 @@ ya instalados, el coste real es el de esas cachés.
 
 | Proyecto | Parte | Suite |
 |---|---|---|
-| Kavana Manufacturing | backend | Vitest |
+| Kavana Manufacturing | backend | Vitest, con PostgreSQL 16 y la cadena de migraciones aplicada |
 | Kavana Manufacturing | frontend | Vitest |
 | Kavana Steelworks | backend | pytest |
 | Laboratorio ERP (muebles) | módulo y panel | pytest |
@@ -72,7 +72,7 @@ ya instalados, el coste real es el de esas cachés.
 
 El informe final está en [resultados.md](resultados.md), con la fecha de la
 última ejecución y el número de pruebas que pasan en cada suite. Última
-ejecución publicada: **1.311 pruebas en verde en las 8 suites**.
+ejecución publicada: **1.364 pruebas en verde en las 8 suites**.
 
 ## Nota de honestidad
 

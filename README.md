@@ -16,8 +16,7 @@ cd kavana-verification
 python verificar.py
 ```
 
-Tarda entre 10 y 15 minutos porque instala dependencias y ejecuta las suites
-completas. Deja el informe en `resultados.md` y `resultados.json`.
+Tarda unos 7 minutos porque instala dependencias y ejecuta las suites completas. Deja el informe en `resultados.md` y `resultados.json`.
 
 Opciones útiles:
 
@@ -32,9 +31,31 @@ python verificar.py --mantener               # conservar los clones temporales
 - `git` y `python` 3.11 o superior.
 - `node` 20 o superior para las suites de JavaScript y TypeScript.
 - `uv` para las suites de Python.
-- Java 21 y Maven para la suite de Java.
 - `docker` solo para la suite que levanta PostgreSQL. Sin docker esa suite se
   omite y lo dice, no la salta en silencio.
+
+## Cuánto ocupa
+
+El repositorio pesa 252 KB al clonarlo. Una ejecución completa escribe unas 800
+MB en un directorio temporal que se borra al terminar, la mayor parte
+dependencias instaladas:
+
+| Proyecto | Ocupa durante la ejecución | Qué lo ocupa |
+|---|---|---|
+| Kavana Warehouse | 298 MB | sus `node_modules` |
+| Kavana Manufacturing | 284 MB | sus `node_modules` (raíz y frontend) |
+| Kavana Steelworks | 125 MB | su entorno de Python |
+| Kavana RouteAI | 65 MB | sus `node_modules` |
+| Laboratorio ERP (muebles) | 14 MB | casi todo el repositorio |
+| Kavana BusRoad | ~30 MB | entorno de Python efímero |
+| Calculadora Kavana | 1 MB | solo el repositorio |
+
+Si no quieres ejecutarlo todo, `--solo` permite lanzar una o dos suites y bajar
+mucho el consumo: `python verificar.py --solo calculadora muebles-lab`.
+
+Queda en disco solo lo que reutilizan otras ejecuciones: las cachés de `npm` y
+`uv`, y la imagen de PostgreSQL si se usa Docker. En una máquina con Node y uv
+ya instalados, el coste real es el de esas cachés.
 
 ## Qué comprueba
 

@@ -6,10 +6,16 @@ con los comandos que usa su propia integración continua y publica la tabla de
 resultados. Cualquiera puede ejecutarlo y comprobar los números.
 
 Uso:
-    python verificar.py                 # todas las suites
+    python verificar.py                 # todas las suites (necesita Docker)
+    python verificar.py --rapido        # solo suites sin Docker (6 de 8)
     python verificar.py --solo steelworks warehouse
     python verificar.py --json resultados.json
     python verificar.py --listar
+
+Requisitos por SO:
+    Windows: git, python 3.11+, node 20+, uv, Docker Desktop (opcional)
+    macOS:   git, python 3.11+, node 20+, uv, Docker Desktop (opcional)
+    Linux:   git, python 3.11+, node 20+, uv, docker (opcional)
 """
 
 from __future__ import annotations
@@ -17,18 +23,20 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
-import urllib.request
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
 OWNER = "kavanasystemsinfo-ui"
 GITHUB = f"https://github.com/{OWNER}"
+IS_WINDOWS = platform.system() == "Windows"
 
 # Cada suite declara el comando de instalación y el de pruebas tal y como los
 # usa su pipeline. Los números que publica este script salen de ejecutarlos.
@@ -142,7 +150,7 @@ SUITES = [
 ]
 
 PATRONES = {
-    "vitest": r"Tests\s+(\d+)\s+passed",
+    "vitest": r"Tests\s+\d+\s+failed\s*\|\s*(\d+)\s+passed\s*\(",
     "pytest": r"(\d+)\s+passed",
     "jest": r"Tests:\s+(\d+)\s+passed",
     # El runner de Node cambia el resumen según la versión: unas veces «ℹ pass N»
@@ -219,13 +227,35 @@ def ejecutar(cmd: list[str], cwd: Path, timeout: int,
         return 127, f"comando no encontrado: {e}"
 
 
-def clonar(repo: str, destino: Path) -> tuple[int, str]:
-    if destino.exists():
-        shutil.rmtree(destino)
-    return ejecutar(
+def _directorio_unico(base: Path, repo: str) -> Path:
+    """Devuelve un path único para evitar colisiones y problemas de permisos en Windows."""
+    sufijo = f"{repo}-{uuid.uuid4().hex[:8]}"
+    return base / sufijo
+
+
+def _limpiar_windows(path: Path) -> None:
+    """Limpieza robusta en Windows: reintentos + fallback a cmd rmdir."""
+    if not IS_WINDOWS:
+        shutil.rmtree(path, ignore_errors=True)
+        return
+    for intento in range(3):
+        try:
+            shutil.rmtree(path, ignore_errors=False)
+            return
+        except PermissionError:
+            time.sleep(0.5 * (intento + 1))
+    # Fallback: cmd rmdir /s /q
+    subprocess.run(["cmd", "/c", "rmdir", "/s", "/q", str(path)], capture_output=True)
+
+
+def clonar(repo: str, destino_base: Path) -> tuple[int, str, Path]:
+    """Clona en un directorio único y devuelve (codigo, salida, path_real)."""
+    destino = _directorio_unico(destino_base, repo)
+    codigo, salida = ejecutar(
         ["git", "clone", "--depth", "1", f"{GITHUB}/{repo}.git", str(destino)],
         destino.parent, 300,
     )
+    return codigo, salida, destino
 
 
 def parsear(runner: str, salida: str) -> tuple[int, int]:
@@ -239,13 +269,31 @@ def parsear(runner: str, salida: str) -> tuple[int, int]:
         return int(pasan), int(fallos) + int(errores)
     m = re.search(PATRONES[runner], salida, re.M)
     if not m:
+        # Fallbacks para vitest: varios formatos de salida
+        if runner == "vitest":
+            # Formato con fallos: «Tests  1 failed | 211 passed (212)»
+            fb = re.search(r"Tests\s+\d+\s+failed\s*\|\s*(\d+)\s+passed\s*\(", salida, re.M)
+            if fb:
+                return int(fb.group(1)), 0
+            # Formato todo pasa: «Tests  555 passed | 50 skipped (605)»
+            fb = re.search(r"Tests\s+(\d+)\s+passed\s*\|\s*\d+\s+skipped", salida, re.M)
+            if fb:
+                return int(fb.group(1)), 0
+            # Formato solo test files: «Test Files  52 passed | 3 skipped (55)»
+            fb = re.search(r"Test Files\s+(\d+)\s+passed", salida, re.M)
+            if fb:
+                return int(fb.group(1)), 0
         return 0, 0
     fallos = 0
     if runner == "node":
         f = re.search(r"(?:ℹ|#) fail (\d+)", salida, re.M)
         fallos = int(f.group(1)) if f else 0
     elif runner in ("jest", "vitest"):
-        f = re.search(r"Tests:\s+(\d+)\s+failed", salida)
+        # vitest/jest pueden salir con formato «Tests  1 failed | 211 passed (212)»
+        # o «Tests: 211 passed, 1 failed». Intentar ambos.
+        f = re.search(r"Tests:?\s+(\d+)\s+failed", salida, re.M)
+        if not f:
+            f = re.search(r"Tests\s+\d+\s+failed\s*\|\s*(\d+)\s+passed", salida, re.M)
         fallos = int(f.group(1)) if f else 0
     elif runner == "pytest":
         f = re.search(r"(\d+)\s+failed", salida)
@@ -297,8 +345,7 @@ def ejecutar_suite(suite: dict, raiz: Path) -> Resultado:
         return res
 
     arranque = time.time()
-    destino = raiz / suite["repo"]
-    codigo, salida = clonar(suite["repo"], destino)
+    codigo, salida, destino = clonar(suite["repo"], raiz)
     if codigo != 0:
         res.estado = "error de clonado"
         res.detalle = salida.strip().splitlines()[-1][:120] if salida.strip() else "git clone falló"
@@ -393,6 +440,7 @@ def informe(resultados: list[Resultado], destino_md: Path, destino_json: Path) -
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--solo", nargs="*", help="ejecutar solo estas suites (por id o por repo)")
+    ap.add_argument("--rapido", action="store_true", help="solo suites sin Docker/PostgreSQL (6 de 8)")
     ap.add_argument("--listar", action="store_true", help="listar las suites y salir")
     ap.add_argument("--json", default="resultados.json", help="ruta del informe JSON")
     ap.add_argument("--markdown", default="resultados.md", help="ruta del informe markdown")
@@ -405,6 +453,10 @@ def main() -> int:
         return 0
 
     elegidas = SUITES
+    if args.rapido:
+        # Excluir las que necesitan PostgreSQL/Docker
+        elegidas = [s for s in SUITES if not s.get("necesita_postgres")]
+        print(f"Modo --rapido: {len(elegidas)} suites (sin Docker/PostgreSQL)\n")
     if args.solo:
         buscados = set(args.solo)
         elegidas = [s for s in SUITES if s["id"] in buscados or s["repo"] in buscados]
@@ -424,7 +476,7 @@ def main() -> int:
                   + (f" [{r.detalle}]" if r.detalle else ""), flush=True)
     finally:
         if not args.mantener and raiz.exists():
-            shutil.rmtree(raiz, ignore_errors=True)
+            _limpiar_windows(raiz)
 
     return informe(resultados, Path(args.markdown), Path(args.json))
 

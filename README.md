@@ -10,29 +10,47 @@ cuenta con un buscador de texto.
 
 ## Cómo se ejecuta
 
+### Opción rápida (recomendada para reclutadores — **no necesita Docker**)
+
 ```bash
 git clone https://github.com/kavanasystemsinfo-ui/kavana-verification.git
 cd kavana-verification
+python verificar.py --rapido
+```
+
+Ejecuta **6 de 8 suites** (todas las que no necesitan PostgreSQL) en ~3-4 minutos.
+Cubre: Steelworks, Laboratorio ERP (muebles), BusRoad, RouteAI, Calculadora, Manufacturing frontend.
+
+### Opción completa (necesita Docker Desktop)
+
+```bash
 python verificar.py
 ```
 
-Tarda unos 7 minutos porque instala dependencias y ejecuta las suites completas. Deja el informe en `resultados.md` y `resultados.json`.
+Ejecuta **todas las 8 suites** (incluye Manufacturing backend + Warehouse API con PostgreSQL real).
+Tarda ~12-16 minutos. Requiere Docker Desktop corriendo.
 
-Opciones útiles:
+### Otras opciones útiles
 
 ```bash
 python verificar.py --listar                 # ver qué suites existen
 python verificar.py --solo steelworks-backend warehouse-api
 python verificar.py --mantener               # conservar los clones temporales
+python verificar.py --json resultados.json   # salida JSON en vez de markdown
 ```
 
-## Qué necesita
+## Qué necesita en su máquina
 
-- `git` y `python` 3.11 o superior.
-- `node` 20 o superior para las suites de JavaScript y TypeScript.
-- `uv` para las suites de Python.
-- `docker` solo para la suite que levanta PostgreSQL. Sin docker esa suite se
-  omite y lo dice, no la salta en silencio.
+| Herramienta | Windows | macOS | Linux | Para qué sirve |
+|-------------|---------|-------|-------|----------------|
+| `git` | ✅ | ✅ | ✅ | Clonar repos |
+| `python` 3.11+ | ✅ | ✅ | ✅ | Ejecutar el script |
+| `node` 20+ | ✅ | ✅ | ✅ | Suites JS/TS (npm test) |
+| `uv` | ✅ | ✅ | ✅ | Suites Python (pytest) |
+| `docker` | Docker Desktop | Docker Desktop | docker engine | **Solo** para Manufacturing backend y Warehouse API |
+
+> **Sin Docker**: el script omite las 2 suites que necesitan PostgreSQL y lo dice explícitamente.
+> **Con Docker**: levanta PostgreSQL 16 en el puerto 55433, ejecuta migraciones y seed, y tira el contenedor al terminar.
 
 ## Cuánto ocupa
 
@@ -50,7 +68,7 @@ dependencias instaladas:
 | Kavana BusRoad | ~30 MB | entorno de Python efímero |
 | Calculadora Kavana | 1 MB | solo el repositorio |
 
-Si no quieres ejecutarlo todo, `--solo` permite lanzar una o dos suites y bajar
+Si no quiere ejecutarlo todo, `--solo` permite lanzar una o dos suites y bajar
 mucho el consumo: `python verificar.py --solo calculadora muebles-lab`.
 
 Queda en disco solo lo que reutilizan otras ejecuciones: las cachés de `npm` y
@@ -59,16 +77,16 @@ ya instalados, el coste real es el de esas cachés.
 
 ## Qué comprueba
 
-| Proyecto | Parte | Suite |
-|---|---|---|
-| Kavana Manufacturing | backend | Vitest, con PostgreSQL 16 y la cadena de migraciones aplicada |
-| Kavana Manufacturing | frontend | Vitest |
-| Kavana Steelworks | backend | pytest |
-| Laboratorio ERP (muebles) | módulo y panel | pytest |
-| Kavana BusRoad | backend | pytest |
-| Kavana RouteAI | servidor | node:test |
-| Calculadora Kavana | motor | node:test |
-| Kavana Warehouse | API | Jest con PostgreSQL 16 |
+| Proyecto | Parte | Suite | ¿Necesita Docker? |
+|---|---|---|---|
+| Kavana Manufacturing | backend | Vitest, con PostgreSQL 16 y la cadena de migraciones aplicada | **Sí** |
+| Kavana Manufacturing | frontend | Vitest | No |
+| Kavana Steelworks | backend | pytest | No |
+| Laboratorio ERP (muebles) | módulo y panel | pytest | No |
+| Kavana BusRoad | backend | pytest | No |
+| Kavana RouteAI | servidor | node:test | No |
+| Calculadora Kavana | motor | node:test | No |
+| Kavana Warehouse | API | Jest con PostgreSQL 16 | **Sí** |
 
 El informe final está en [resultados.md](resultados.md), con la fecha de la
 última ejecución y el número de pruebas que pasan en cada suite. Última

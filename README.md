@@ -90,7 +90,7 @@ ya instalados, el coste real es el de esas cachés.
 
 El informe final está en [resultados.md](resultados.md), con la fecha de la
 última ejecución y el número de pruebas que pasan en cada suite. Última
-ejecución publicada: **1.387 pruebas en verde en las 8 suites**.
+ejecución publicada: **625 pruebas en verde en 7 de 8 suites**.
 
 ## Nota de honestidad
 

@@ -215,11 +215,24 @@ def entorno_limpio(extra: dict | None = None) -> dict:
 
 def ejecutar(cmd: list[str], cwd: Path, timeout: int,
              extra_env: dict | None = None) -> tuple[int, str]:
+    """Ejecuta comando. En Windows, usa shell=True para resolver .cmd (npm, npx, etc.)."""
+    kwargs = dict(
+        cwd=str(cwd),
+        env=entorno_limpio(extra_env),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    # En Windows, npm/node/npx/uv son .cmd y necesitan shell=True para ejecutarse
+    if IS_WINDOWS and cmd and cmd[0] in ("npm", "node", "npx", "uv", "npx.cmd", "npm.cmd", "node.exe"):
+        kwargs["shell"] = True
+        # Convertir lista a string para shell=True
+        cmd_str = " ".join(cmd)
+    else:
+        cmd_str = cmd
+
     try:
-        r = subprocess.run(
-            cmd, cwd=str(cwd), env=entorno_limpio(extra_env), capture_output=True,
-            text=True, timeout=timeout,
-        )
+        r = subprocess.run(cmd_str, **kwargs)
         return r.returncode, (r.stdout or "") + (r.stderr or "")
     except subprocess.TimeoutExpired:
         return 124, f"tiempo agotado tras {timeout} s"

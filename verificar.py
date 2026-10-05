@@ -215,13 +215,17 @@ def entorno_limpio(extra: dict | None = None) -> dict:
 
 def ejecutar(cmd: list[str], cwd: Path, timeout: int,
              extra_env: dict | None = None) -> tuple[int, str]:
-    """Ejecuta comando. En Windows, usa shell=True para resolver .cmd (npm, npx, etc.)."""
+    """Ejecuta comando. En Windows, usa shell=True para resolver .cmd (npm, npx, etc.).
+    Usa encoding UTF-8 con errors='replace' para evitar UnicodeDecodeError en Windows (cp1252).
+    """
     kwargs = dict(
         cwd=str(cwd),
         env=entorno_limpio(extra_env),
         capture_output=True,
         text=True,
         timeout=timeout,
+        encoding="utf-8",
+        errors="replace",
     )
     # En Windows, npm/node/npx/uv son .cmd y necesitan shell=True para ejecutarse
     if IS_WINDOWS and cmd and cmd[0] in ("npm", "node", "npx", "uv", "npx.cmd", "npm.cmd", "node.exe"):
